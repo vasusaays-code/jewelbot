@@ -1,6 +1,6 @@
 # jewelbot
 
-Small Flask webhook for a WhatsApp-based virtual try-on flow using Twilio and Fal.
+Small Flask webhook for a WhatsApp-based professional jewelry shoot flow using Twilio and Fal.
 
 ## Setup
 
@@ -19,6 +19,13 @@ python app.py
 ```
 
 The webhook endpoint is `/bot`.
+
+## Bot Flow
+
+1. User sends one jewelry image on WhatsApp.
+2. The bot identifies the type of jewelry in the image.
+3. The bot generates a luxury editorial-style professional model shoot featuring that exact item.
+4. The result image is sent back on WhatsApp.
 
 ## Deploy on Render
 
@@ -45,4 +52,4 @@ TWILIO_TOKEN
 https://your-service-name.onrender.com/bot
 ```
 
-For testing, Render's free plan is fine. For better reliability later, move to a paid plan and replace the in-memory `user_memory` store with Redis or a database.
+For testing, Render's free plan is fine. For better reliability later, move to a paid plan.
