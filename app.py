@@ -1,4 +1,5 @@
 import base64
+import html
 import logging
 import os
 import sqlite3
@@ -239,75 +240,429 @@ def require_admin():
 
 def render_admin_page():
     admin_key = get_admin_key() or ""
+    clients = list_clients()
+    total_clients = len(clients)
+    active_clients = sum(1 for client in clients if client["status"] == "active")
+    inactive_clients = total_clients - active_clients
+    total_credits = sum(client["remaining_credits"] for client in clients)
     rows = []
-    for client in list_clients():
+    for client in clients:
+        status_class = "status-active" if client["status"] == "active" else "status-inactive"
         rows.append(
             f"""
             <tr>
-                <td>{client['name']}</td>
-                <td>{client['phone_number']}</td>
-                <td>{client['status']}</td>
-                <td>{client['remaining_credits']}</td>
-                <td>{client['updated_at']}</td>
+                <td>
+                  <div class="client-name">{html.escape(client['name'])}</div>
+                  <div class="client-meta">Updated {html.escape(client['updated_at'])}</div>
+                </td>
+                <td><span class="phone-pill">{html.escape(client['phone_number'])}</span></td>
+                <td><span class="status-pill {status_class}">{html.escape(client['status'].title())}</span></td>
+                <td><strong>{client['remaining_credits']}</strong></td>
+                <td>{html.escape(client['updated_at'])}</td>
             </tr>
             """
         )
 
-    table_rows = "".join(rows) or "<tr><td colspan='5'>No clients onboarded yet.</td></tr>"
+    table_rows = "".join(rows) or """
+    <tr>
+      <td colspan="5">
+        <div class="empty-state">
+          <div class="empty-title">No clients onboarded yet</div>
+          <div class="empty-copy">Add your first WhatsApp number above to start controlling access and credits.</div>
+        </div>
+      </td>
+    </tr>
+    """
     return f"""
     <!doctype html>
     <html>
     <head>
       <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
       <title>Jewelbot Admin</title>
       <style>
-        body {{ font-family: Arial, sans-serif; margin: 32px; background: #faf8f4; color: #1c1814; }}
-        h1, h2 {{ margin-bottom: 12px; }}
-        form, table {{ background: white; border: 1px solid #ddd3c5; border-radius: 12px; padding: 20px; }}
-        form {{ max-width: 520px; margin-bottom: 24px; }}
-        label {{ display: block; margin-top: 12px; font-weight: 600; }}
-        input, select, button {{ width: 100%; padding: 10px; margin-top: 6px; box-sizing: border-box; }}
-        button {{ background: #111; color: white; border: 0; border-radius: 8px; cursor: pointer; margin-top: 16px; }}
-        table {{ width: 100%; border-collapse: collapse; }}
-        th, td {{ text-align: left; padding: 12px; border-bottom: 1px solid #eee; }}
+        :root {{
+          --ink: #171214;
+          --muted: #6f6569;
+          --line: rgba(74, 53, 60, 0.14);
+          --card: rgba(255, 252, 249, 0.9);
+          --card-strong: rgba(255, 255, 255, 0.96);
+          --glow: #f2d7c6;
+          --accent: #a6493a;
+          --accent-dark: #7d2f23;
+          --active-bg: #edf8ef;
+          --active-ink: #1f6a3f;
+          --inactive-bg: #fdf1ef;
+          --inactive-ink: #9d4234;
+          --shadow: 0 24px 60px rgba(70, 44, 33, 0.16);
+        }}
+        * {{ box-sizing: border-box; }}
+        body {{
+          margin: 0;
+          color: var(--ink);
+          font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+          background:
+            radial-gradient(circle at top left, rgba(255, 223, 196, 0.95), transparent 28%),
+            radial-gradient(circle at top right, rgba(225, 194, 210, 0.72), transparent 24%),
+            linear-gradient(180deg, #f9efe7 0%, #f7f1eb 42%, #f4ede7 100%);
+        }}
+        .shell {{
+          max-width: 1240px;
+          margin: 0 auto;
+          padding: 32px 20px 48px;
+        }}
+        .hero {{
+          position: relative;
+          overflow: hidden;
+          padding: 34px;
+          border: 1px solid rgba(255, 255, 255, 0.55);
+          border-radius: 28px;
+          background:
+            linear-gradient(135deg, rgba(255,255,255,0.78), rgba(255,248,242,0.66)),
+            linear-gradient(145deg, rgba(255,255,255,0.15), rgba(166,73,58,0.08));
+          box-shadow: var(--shadow);
+          backdrop-filter: blur(16px);
+        }}
+        .hero::after {{
+          content: "";
+          position: absolute;
+          inset: auto -60px -80px auto;
+          width: 240px;
+          height: 240px;
+          border-radius: 50%;
+          background: radial-gradient(circle, rgba(166,73,58,0.16), transparent 70%);
+        }}
+        .eyebrow {{
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 12px;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.72);
+          color: var(--accent-dark);
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+        }}
+        h1 {{
+          margin: 18px 0 10px;
+          font-size: clamp(2.1rem, 5vw, 4rem);
+          line-height: 0.95;
+          letter-spacing: -0.04em;
+        }}
+        .hero-copy {{
+          max-width: 720px;
+          margin: 0;
+          font-size: 1rem;
+          line-height: 1.7;
+          color: var(--muted);
+        }}
+        .stats {{
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 14px;
+          margin-top: 26px;
+        }}
+        .stat-card {{
+          padding: 18px;
+          border: 1px solid rgba(255,255,255,0.7);
+          border-radius: 22px;
+          background: rgba(255,255,255,0.78);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.55);
+        }}
+        .stat-label {{
+          margin: 0 0 10px;
+          color: var(--muted);
+          font-size: 0.82rem;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+        }}
+        .stat-value {{
+          margin: 0;
+          font-size: 2rem;
+          font-weight: 800;
+          letter-spacing: -0.04em;
+        }}
+        .layout {{
+          display: grid;
+          grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+          gap: 22px;
+          margin-top: 24px;
+          align-items: start;
+        }}
+        .panel {{
+          border: 1px solid var(--line);
+          border-radius: 26px;
+          background: var(--card);
+          box-shadow: var(--shadow);
+          backdrop-filter: blur(16px);
+        }}
+        .panel-inner {{
+          padding: 24px;
+        }}
+        .panel h2 {{
+          margin: 0;
+          font-size: 1.3rem;
+          letter-spacing: -0.03em;
+        }}
+        .panel-copy {{
+          margin: 8px 0 0;
+          color: var(--muted);
+          line-height: 1.65;
+          font-size: 0.96rem;
+        }}
+        form {{
+          display: grid;
+          gap: 14px;
+          margin-top: 22px;
+        }}
+        .field {{
+          display: grid;
+          gap: 8px;
+        }}
+        label {{
+          font-size: 0.9rem;
+          font-weight: 700;
+          color: #34282d;
+        }}
+        input, select, button {{
+          width: 100%;
+          border-radius: 16px;
+          border: 1px solid rgba(96, 72, 80, 0.16);
+          padding: 13px 14px;
+          font: inherit;
+        }}
+        input, select {{
+          color: var(--ink);
+          background: var(--card-strong);
+          outline: none;
+          transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+        }}
+        input:focus, select:focus {{
+          border-color: rgba(166, 73, 58, 0.5);
+          box-shadow: 0 0 0 4px rgba(166, 73, 58, 0.12);
+          transform: translateY(-1px);
+        }}
+        .field-hint {{
+          margin: -2px 0 0;
+          color: var(--muted);
+          font-size: 0.82rem;
+        }}
+        button {{
+          border: 0;
+          color: white;
+          font-weight: 800;
+          letter-spacing: 0.01em;
+          cursor: pointer;
+          background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+          box-shadow: 0 16px 32px rgba(125, 47, 35, 0.28);
+          transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+        }}
+        button:hover {{
+          transform: translateY(-1px);
+          box-shadow: 0 20px 38px rgba(125, 47, 35, 0.34);
+        }}
+        .table-wrap {{
+          overflow: hidden;
+        }}
+        .table-header {{
+          display: flex;
+          justify-content: space-between;
+          gap: 16px;
+          align-items: flex-start;
+          margin-bottom: 18px;
+        }}
+        .table-note {{
+          margin: 6px 0 0;
+          color: var(--muted);
+          font-size: 0.9rem;
+        }}
+        .table-shell {{
+          overflow-x: auto;
+          border: 1px solid rgba(96, 72, 80, 0.12);
+          border-radius: 20px;
+          background: rgba(255,255,255,0.72);
+        }}
+        table {{
+          width: 100%;
+          border-collapse: collapse;
+          min-width: 720px;
+        }}
+        th, td {{
+          text-align: left;
+          padding: 16px 18px;
+          border-bottom: 1px solid rgba(96, 72, 80, 0.1);
+          vertical-align: middle;
+        }}
+        th {{
+          color: var(--muted);
+          font-size: 0.78rem;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          background: rgba(249, 242, 237, 0.92);
+        }}
+        tr:last-child td {{
+          border-bottom: 0;
+        }}
+        .client-name {{
+          font-weight: 800;
+          letter-spacing: -0.01em;
+        }}
+        .client-meta {{
+          margin-top: 4px;
+          color: var(--muted);
+          font-size: 0.82rem;
+        }}
+        .phone-pill, .status-pill {{
+          display: inline-flex;
+          align-items: center;
+          border-radius: 999px;
+          padding: 8px 12px;
+          font-size: 0.84rem;
+          font-weight: 700;
+        }}
+        .phone-pill {{
+          background: rgba(245, 238, 232, 0.94);
+          color: #4d3e41;
+        }}
+        .status-active {{
+          background: var(--active-bg);
+          color: var(--active-ink);
+        }}
+        .status-inactive {{
+          background: var(--inactive-bg);
+          color: var(--inactive-ink);
+        }}
+        .empty-state {{
+          padding: 36px 16px;
+          text-align: center;
+        }}
+        .empty-title {{
+          font-size: 1.1rem;
+          font-weight: 800;
+          letter-spacing: -0.02em;
+        }}
+        .empty-copy {{
+          margin-top: 8px;
+          color: var(--muted);
+          line-height: 1.6;
+        }}
+        @media (max-width: 980px) {{
+          .stats {{
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }}
+          .layout {{
+            grid-template-columns: 1fr;
+          }}
+        }}
+        @media (max-width: 640px) {{
+          .shell {{
+            padding: 18px 14px 34px;
+          }}
+          .hero {{
+            padding: 24px 18px;
+            border-radius: 24px;
+          }}
+          .stats {{
+            grid-template-columns: 1fr;
+          }}
+          .panel-inner {{
+            padding: 18px;
+          }}
+          .table-header {{
+            flex-direction: column;
+          }}
+        }}
       </style>
     </head>
     <body>
-      <h1>Jewelbot Admin</h1>
-      <p>Onboard clients, activate or deactivate access, and manage remaining credits.</p>
+      <div class="shell">
+        <section class="hero">
+          <div class="eyebrow">Jewelbot Control Room</div>
+          <h1>Manage client access like a luxury studio.</h1>
+          <p class="hero-copy">
+            Onboard WhatsApp numbers, control who can use the bot, and manage credits from one clean dashboard.
+          </p>
+          <div class="stats">
+            <article class="stat-card">
+              <p class="stat-label">Total Clients</p>
+              <p class="stat-value">{total_clients}</p>
+            </article>
+            <article class="stat-card">
+              <p class="stat-label">Active Clients</p>
+              <p class="stat-value">{active_clients}</p>
+            </article>
+            <article class="stat-card">
+              <p class="stat-label">Inactive Clients</p>
+              <p class="stat-value">{inactive_clients}</p>
+            </article>
+            <article class="stat-card">
+              <p class="stat-label">Credits Live</p>
+              <p class="stat-value">{total_credits}</p>
+            </article>
+          </div>
+        </section>
 
-      <form method="post" action="/admin/clients?admin_key={admin_key}">
-        <h2>Add Or Update Client</h2>
-        <label>Client Name
-          <input type="text" name="name" placeholder="Client name" required>
-        </label>
-        <label>WhatsApp Number
-          <input type="text" name="phone_number" placeholder="whatsapp:+9198xxxxxxx" required>
-        </label>
-        <label>Remaining Credits
-          <input type="number" name="remaining_credits" min="0" value="10" required>
-        </label>
-        <label>Status
-          <select name="status">
-            <option value="active">active</option>
-            <option value="inactive">inactive</option>
-          </select>
-        </label>
-        <button type="submit">Save Client</button>
-      </form>
+        <section class="layout">
+          <div class="panel">
+            <div class="panel-inner">
+              <h2>Add or update a client</h2>
+              <p class="panel-copy">
+                Save a WhatsApp number, choose whether access is active, and set the available credits for that client.
+              </p>
+              <form method="post" action="/admin/clients?admin_key={admin_key}">
+                <div class="field">
+                  <label for="name">Client Name</label>
+                  <input id="name" type="text" name="name" placeholder="Client name" required>
+                </div>
+                <div class="field">
+                  <label for="phone_number">WhatsApp Number</label>
+                  <input id="phone_number" type="text" name="phone_number" placeholder="whatsapp:+9198xxxxxxx" required>
+                  <p class="field-hint">Use full format with no spaces, for example: whatsapp:+919876543210</p>
+                </div>
+                <div class="field">
+                  <label for="remaining_credits">Remaining Credits</label>
+                  <input id="remaining_credits" type="number" name="remaining_credits" min="0" value="10" required>
+                </div>
+                <div class="field">
+                  <label for="status">Status</label>
+                  <select id="status" name="status">
+                    <option value="active">active</option>
+                    <option value="inactive">inactive</option>
+                  </select>
+                </div>
+                <button type="submit">Save Client</button>
+              </form>
+            </div>
+          </div>
 
-      <table>
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Phone</th>
-            <th>Status</th>
-            <th>Credits</th>
-            <th>Updated</th>
-          </tr>
-        </thead>
-        <tbody>{table_rows}</tbody>
-      </table>
+          <div class="panel">
+            <div class="panel-inner table-wrap">
+              <div class="table-header">
+                <div>
+                  <h2>Client Access List</h2>
+                  <p class="table-note">Every onboarded WhatsApp number appears here with status and remaining credits.</p>
+                </div>
+              </div>
+              <div class="table-shell">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Phone</th>
+                      <th>Status</th>
+                      <th>Credits</th>
+                      <th>Updated</th>
+                    </tr>
+                  </thead>
+                  <tbody>{table_rows}</tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
     </body>
     </html>
     """
