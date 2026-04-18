@@ -2,7 +2,7 @@ import base64
 import os
 
 import requests
-from flask import Flask, request
+from flask import Flask, jsonify, request
 from twilio.rest import Client
 from twilio.twiml.messaging_response import MessagingResponse
 from dotenv import load_dotenv
@@ -32,6 +32,22 @@ def send_whatsapp(to, image_url):
         body="✨ Done!",
         media_url=[image_url]
     )
+
+
+@app.route("/", methods=["GET"])
+def home():
+    return jsonify(
+        {
+            "status": "ok",
+            "service": "jewelbot",
+            "webhook": "/bot",
+        }
+    )
+
+
+@app.route("/health", methods=["GET"])
+def health():
+    return "ok", 200
 
 
 @app.route("/bot", methods=["POST"])
@@ -155,4 +171,5 @@ Final image must feel like a real photoshoot where the person wore those exact s
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    port = int(os.getenv("PORT", "5000"))
+    app.run(host="0.0.0.0", port=port, debug=True)
