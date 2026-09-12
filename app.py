@@ -21,6 +21,7 @@ TWILIO_SID = os.getenv("TWILIO_SID")
 TWILIO_TOKEN = os.getenv("TWILIO_TOKEN")
 ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 DATABASE_PATH = os.getenv("DATABASE_PATH", "jewelbot.db")
+SUPPORT_PHONE = os.getenv("SUPPORT_PHONE", "7904070979")
 db_lock = threading.Lock()
 
 EDITORIAL_PROMPT = """First, carefully identify what kind of jewelry or accessory is shown in the input image. Determine whether it is a ring, necklace, pendant, bracelet, bangle, earrings, anklet, nose pin, brooch, waist chain, or another wearable fashion accessory.
@@ -796,7 +797,7 @@ def bot():
     msg = resp.message()
 
     if not FAL_KEY or not TWILIO_SID or not TWILIO_TOKEN:
-        msg.body("Server configuration is incomplete. Please contact support.")
+        msg.body(f"Server configuration is incomplete. Please contact support: {SUPPORT_PHONE}.")
         return str(resp)
 
     media_url = request.values.get("MediaUrl0")
@@ -804,20 +805,20 @@ def bot():
     client = get_client(user) if user else None
 
     if not client:
-        msg.body("Mee WhatsApp number onboard avvaledu. Support ni contact cheyandi.")
+        msg.body(f"Welcome to jewel tara! 💎\nMee WhatsApp number onboard avvaledu. Support ni contact cheyandi: {SUPPORT_PHONE}")
         return str(resp)
 
     if client["status"] != "active":
-        msg.body("Mee access ippudu inactive ga undi. Support ni contact cheyandi.")
+        msg.body(f"Mee access ippudu inactive ga undi. Support ni contact cheyandi: {SUPPORT_PHONE}")
         return str(resp)
 
     if media_url:
         updated_client, error = consume_credit(user)
         if error == "no_credits":
-            msg.body("Mee credits aipoyayi. Support ni contact cheyandi.")
+            msg.body(f"Mee credits aipoyayi. Credits recharge kosam support ni contact cheyandi: {SUPPORT_PHONE}")
             return str(resp)
         if error in {"not_onboarded", "inactive"}:
-            msg.body("Mee account use cheyyadaniki ready ga ledu. Support ni contact cheyandi.")
+            msg.body(f"Mee account use cheyyadaniki ready ga ledu. Support ni contact cheyandi: {SUPPORT_PHONE}")
             return str(resp)
 
         # download image
@@ -847,8 +848,10 @@ def bot():
 
     else:
         msg.body(
-            "Jewellery image send cheyandi 💎\n"
-            f"Remaining credits: {client['remaining_credits']}"
+            "Welcome to jewel tara! 💎\n"
+            "Please send a clear jewelry image to create a luxury model shoot.\n\n"
+            f"Remaining credits: {client['remaining_credits']}\n"
+            f"Support: {SUPPORT_PHONE}"
         )
 
     return str(resp)
